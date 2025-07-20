@@ -1,101 +1,104 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class DeliveryManager : MonoBehaviour {
+public class DeliveryManager : MonoBehaviour
+{
+    // === Singleton ===
+    public static DeliveryManager Instance { get; private set; }
 
-
+    // === Events ===
     public event EventHandler OnRecipeSpawned;
     public event EventHandler OnRecipeCompleted;
     public event EventHandler OnRecipeSuccess;
     public event EventHandler OnRecipeFailed;
 
-
-    public static DeliveryManager Instance { get; private set; }
-
-
+    // === Serialized Fields ===
     [SerializeField] private RecipeListSO recipeListSO;
 
-
+    // === Private Fields ===
     private List<RecipeSO> waitingRecipeSOList;
     private float spawnRecipeTimer;
-    private float spawnRecipeTimerMax = 4f;
-    private int waitingRecipesMax = 4;
+    private const float SPAWN_RECIPE_TIMER_MAX = 4f;
+    private const int WAITING_RECIPES_MAX = 4;
     private int successfulRecipesAmount;
 
-
-    private void Awake() {
+    // === Unity Methods ===
+    private void Awake ()
+    {
+        if (Instance != null)
+        {
+            Debug.LogError("Multiple instances of DeliveryManager detected!");
+        }
         Instance = this;
-
 
         waitingRecipeSOList = new List<RecipeSO>();
     }
 
-    private void Update() {
+    private void Update ()
+    {
+        if (!KitchenGameManager.Instance.IsGamePlaying()) return;
+
         spawnRecipeTimer -= Time.deltaTime;
-        if (spawnRecipeTimer <= 0f) {
-            spawnRecipeTimer = spawnRecipeTimerMax;
+        if (spawnRecipeTimer <= 0f)
+        {
+            spawnRecipeTimer = SPAWN_RECIPE_TIMER_MAX;
 
-            if (KitchenGameManager.Instance.IsGamePlaying() && waitingRecipeSOList.Count < waitingRecipesMax) {
-                RecipeSO waitingRecipeSO = recipeListSO.recipeSOList[UnityEngine.Random.Range(0, recipeListSO.recipeSOList.Count)];
-
-                waitingRecipeSOList.Add(waitingRecipeSO);
-
+            if (waitingRecipeSOList.Count < WAITING_RECIPES_MAX)
+            {
+                RecipeSO newRecipe = GetRandomRecipe();
+                waitingRecipeSOList.Add(newRecipe);
                 OnRecipeSpawned?.Invoke(this, EventArgs.Empty);
             }
         }
     }
 
-    public void DeliverRecipe(PlateKitchenObject plateKitchenObject) {
-        for (int i = 0; i < waitingRecipeSOList.Count; i++) {
-            RecipeSO waitingRecipeSO = waitingRecipeSOList[i];
+    // === Public Methods ===
+    public void DeliverRecipe (PlateKitchenObject plate)
+    {
+        foreach (RecipeSO recipe in waitingRecipeSOList)
+        {
+            if (MatchesRecipe(recipe, plate))
+            {
+                waitingRecipeSOList.Remove(recipe);
+                successfulRecipesAmount++;
 
-            if (waitingRecipeSO.kitchenObjectSOList.Count == plateKitchenObject.GetKitchenObjectSOList().Count) {
-                // Has the same number of ingredients
-                bool plateContentsMatchesRecipe = true;
-                foreach (KitchenObjectSO recipeKitchenObjectSO in waitingRecipeSO.kitchenObjectSOList) {
-                    // Cycling through all ingredients in the Recipe
-                    bool ingredientFound = false;
-                    foreach (KitchenObjectSO plateKitchenObjectSO in plateKitchenObject.GetKitchenObjectSOList()) {
-                        // Cycling through all ingredients in the Plate
-                        if (plateKitchenObjectSO == recipeKitchenObjectSO) {
-                            // Ingredient matches!
-                            ingredientFound = true;
-                            break;
-                        }
-                    }
-                    if (!ingredientFound) {
-                        // This Recipe ingredient was not found on the Plate
-                        plateContentsMatchesRecipe = false;
-                    }
-                }
-
-                if (plateContentsMatchesRecipe) {
-                    // Player delivered the correct recipe!
-
-                    successfulRecipesAmount++;
-
-                    waitingRecipeSOList.RemoveAt(i);
-
-                    OnRecipeCompleted?.Invoke(this, EventArgs.Empty);
-                    OnRecipeSuccess?.Invoke(this, EventArgs.Empty);
-                    return;
-                }
+                OnRecipeCompleted?.Invoke(this, EventArgs.Empty);
+                OnRecipeSuccess?.Invoke(this, EventArgs.Empty);
+                return;
             }
         }
 
-        // No matches found!
-        // Player did not deliver a correct recipe
+        // No matching recipe found
         OnRecipeFailed?.Invoke(this, EventArgs.Empty);
     }
 
-    public List<RecipeSO> GetWaitingRecipeSOList() {
-        return waitingRecipeSOList;
+    public List<RecipeSO> GetWaitingRecipeSOList () => waitingRecipeSOList;
+
+    public int GetSuccessfulRecipesAmount () => successfulRecipesAmount;
+
+    // === Private Methods ===
+    private RecipeSO GetRandomRecipe ()
+    {
+        var recipes = recipeListSO.recipeSOList;
+        return recipes[UnityEngine.Random.Range(0, recipes.Count)];
     }
 
-    public int GetSuccessfulRecipesAmount() {
-        return successfulRecipesAmount;
-    }
+    private bool MatchesRecipe (RecipeSO recipe, PlateKitchenObject plate)
+    {
+        List<KitchenObjectSO> plateIngredients = plate.GetKitchenObjectSOList();
 
+        if (recipe.kitchenObjectSOList.Count != plateIngredients.Count)
+            return false;
+
+        foreach (KitchenObjectSO requiredIngredient in recipe.kitchenObjectSOList)
+        {
+            if (!plateIngredients.Contains(requiredIngredient))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

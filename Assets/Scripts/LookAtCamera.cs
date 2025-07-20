@@ -17,7 +17,12 @@ public class LookAtCamera : MonoBehaviour {
 
 
     private void LateUpdate() {
-        switch (mode) {
+        UpdateCameraAngle();
+    }
+    private void UpdateCameraAngle ()
+    {
+        switch (mode)
+        {
             case Mode.LookAt:
                 transform.LookAt(Camera.main.transform);
                 break;
@@ -33,5 +38,4 @@ public class LookAtCamera : MonoBehaviour {
                 break;
         }
     }
-
 }
